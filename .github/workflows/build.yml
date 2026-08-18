@@ -27,7 +27,7 @@ env:
   ANDROID_BUILD_TOOLS: '34.0.0'
   ANDROID_NDK_VERSION: '25.2.9519653'
   CMAKE_VERSION: '3.22.1'
-  GRADLE_VERSION: '8.5'
+  GRADLE_VERSION: '8.11.1'
 
 jobs:
   build:
@@ -76,7 +76,7 @@ jobs:
           fi
           
           echo "status=generated" >> $GITHUB_OUTPUT
-          echo "gradle-wrapper.jar not found, generating..."
+          echo "gradle-wrapper.jar not found, generating Gradle ${GRADLE_VERSION}..."
           
           GRADLE_ZIP="gradle-${GRADLE_VERSION}-bin.zip"
           GRADLE_URL="https://services.gradle.org/distributions/${GRADLE_ZIP}"
@@ -174,7 +174,7 @@ jobs:
           echo "=== APK Files ==="
           find app/build/outputs -name "*.apk" ! -name "*-unaligned.apk" -exec ls -lh {} \;
           echo ""
-          echo "=== Native .so Files ==="
+          echo "=== Native .so Files (arm64-v8a) ==="
           find app/build -name "*.so" -path "*/arm64-v8a/*" | head -20
 
       - name: Upload APK artifact
@@ -200,4 +200,4 @@ jobs:
           echo "## Build Result" >> $GITHUB_STEP_SUMMARY
           echo "- **Type:** $BUILD_TYPE" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit:** \`${{ steps.timestamp.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Wrapper:** ${{ steps.wrapper.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Gradle Wrapper:** ${{ steps.wrapper.outputs.status }}" >> $GITHUB_STEP_SUMMARY
