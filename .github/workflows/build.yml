@@ -146,58 +146,60 @@ jobs:
             ./gradlew assembleDebug --stacktrace --no-daemon
           fi
 
+      - name: 🔍 DEBUG — List all build outputs
+        id: debug
+        if: always()
+        run: |
+          echo "=== Full build output tree ==="
+          find app/build/outputs -type f 2>/dev/null | sort
+          echo ""
+          echo "=== APK files found ==="
+          APK_COUNT=$(find app/build/outputs -name "*.apk" 2>/dev/null | wc -l)
+          echo "Total APKs: $APK_COUNT"
+          find app/build/outputs -name "*.apk" -exec ls -lh {} \; 2>/dev/null
+          echo ""
+          echo "=== .so files found ==="
+          find app/build -name "*.so" 2>/dev/null | head -30
+          echo "apk_count=$APK_COUNT" >> $GITHUB_OUTPUT
+
       - name: Generate build timestamp
         id: timestamp
         run: |
           echo "datetime=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Rename APK artifacts
-        run: |
-          BUILD_DIR="app/build/outputs/apk"
-          TS="${{ steps.timestamp.outputs.datetime }}"
-          SHA="${{ steps.timestamp.outputs.sha_short }}"
-          
-          [ -f "$BUILD_DIR/release/app-release-unsigned.apk" ] && \
-            cp "$BUILD_DIR/release/app-release-unsigned.apk" "R3DNETWORK_${SHA}_${TS}_release.apk"
-          
-          [ -f "$BUILD_DIR/release/app-release.apk" ] && \
-            cp "$BUILD_DIR/release/app-release.apk" "R3DNETWORK_${SHA}_${TS}_release-signed.apk"
-          
-          [ -f "$BUILD_DIR/debug/app-debug.apk" ] && \
-            cp "$BUILD_DIR/debug/app-debug.apk" "R3DNETWORK_${SHA}_${TS}_debug.apk"
-          
-          ls -la *.apk 2>/dev/null || true
-
-      - name: List build outputs
-        run: |
-          echo "=== APK Files ==="
-          find app/build/outputs -name "*.apk" ! -name "*-unaligned.apk" -exec ls -lh {} \;
-          echo ""
-          echo "=== Native .so Files (arm64-v8a) ==="
-          find app/build -name "*.so" -path "*/arm64-v8a/*" | head -20
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - name: 📦 Upload APK artifact
+        uses: actions/upload-artifact@v5
         with:
           name: R3DNETWORK-${{ env.BUILD_TYPE }}-${{ steps.timestamp.outputs.sha_short }}
-          path: "*.apk"
+          path: |
+            app/build/outputs/apk/**/*.apk
+            !**/*-unaligned.apk
           if-no-files-found: error
           retention-days: 30
+          compression-level: 6
 
-      - name: Upload native .so files
-        uses: actions/upload-artifact@v4
+      - name: 📦 Upload native .so files
+        uses: actions/upload-artifact@v5
         with:
           name: native-libs-${{ steps.timestamp.outputs.sha_short }}
           path: |
             app/build/intermediates/stripped_native_libs/**/lib/arm64-v8a/*.so
             app/build/intermediates/stripped_native_libs/**/lib/armeabi-v7a/*.so
+            app/build/intermediates/merged_native_libs/**/lib/arm64-v8a/*.so
+            app/build/intermediates/merged_native_libs/**/lib/armeabi-v7a/*.so
           if-no-files-found: warn
           retention-days: 14
+          compression-level: 6
 
-      - name: Build summary
+      - name: 📊 Build summary
+        if: always()
         run: |
           echo "## Build Result" >> $GITHUB_STEP_SUMMARY
-          echo "- **Type:** $BUILD_TYPE" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit:** \`${{ steps.timestamp.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Gradle Wrapper:** ${{ steps.wrapper.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Type | $BUILD_TYPE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ steps.timestamp.outputs.sha_short }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gradle Wrapper | ${{ steps.wrapper.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| APKs Found | ${{ steps.debug.outputs.apk_count }} |" >> $GITHUB_STEP_SUMMARY
