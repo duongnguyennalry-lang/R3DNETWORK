@@ -41,7 +41,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup Java JDK ${{ env.JAVA_VERSION }}
+      - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -66,5 +66,138 @@ jobs:
           echo "$ANDROID_SDK_ROOT/cmake/${{ env.CMAKE_VERSION }}/bin" >> $GITHUB_PATH
 
       - name: Generate Gradle Wrapper if missing
+        id: wrapper
         run: |
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          WRAPPER_JAR="gradle/wrapper/gradle-wrapper.jar"
+          if [ -f "$WRAPPER_JAR" ]; then
+            echo "status=exists" >> $GITHUB_OUTPUT
+            echo "Gradle wrapper already present, skipping generation"
+            exit 0
+          fi
+          
+          echo "status=generated" >> $GITHUB_OUTPUT
+          echo "gradle-wrapper.jar not found, generating..."
+          
+          GRADLE_ZIP="gradle-${GRADLE_VERSION}-bin.zip"
+          GRADLE_URL="https://services.gradle.org/distributions/${GRADLE_ZIP}"
+          
+          echo "Downloading Gradle ${GRADLE_VERSION}..."
+          curl -sL -o "$GRADLE_ZIP" "$GRADLE_URL"
+          
+          echo "Extracting Gradle..."
+          unzip -q "$GRADLE_ZIP"
+          
+          export PATH="$PWD/gradle-${GRADLE_VERSION}/bin:$PATH"
+          
+          echo "Generating wrapper..."
+          gradle wrapper --gradle-version "$GRADLE_VERSION"
+          
+          echo "Cleanup..."
+          rm -rf "gradle-${GRADLE_VERSION}" "$GRADLE_ZIP"
+          
+          echo "Wrapper generated:"
+          ls -la gradle/wrapper/
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            app/.cxx
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache NDK build artifacts
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/obj
+          key: ${{ runner.os }}-ndk-${{ hashFiles('app/src/main/jni/**/*.cpp', 'app/src/main/jni/**/*.h', 'app/src/main/jni/**/*.hpp') }}
+          restore-keys: |
+            ${{ runner.os }}-ndk-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build APK
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkey -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -noprompt
+          fi
+          
+          if [ "$BUILD_TYPE" = "release" ]; then
+            ./gradlew assembleRelease --stacktrace --no-daemon \
+              -Pandroid.injected.signing.store.file=$HOME/.android/debug.keystore \
+              -Pandroid.injected.signing.store.password=android \
+              -Pandroid.injected.signing.key.alias=androiddebugkey \
+              -Pandroid.injected.signing.key.password=android
+          else
+            ./gradlew assembleDebug --stacktrace --no-daemon
+          fi
+
+      - name: Generate build timestamp
+        id: timestamp
+        run: |
+          echo "datetime=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Rename APK artifacts
+        run: |
+          BUILD_DIR="app/build/outputs/apk"
+          TS="${{ steps.timestamp.outputs.datetime }}"
+          SHA="${{ steps.timestamp.outputs.sha_short }}"
+          
+          [ -f "$BUILD_DIR/release/app-release-unsigned.apk" ] && \
+            cp "$BUILD_DIR/release/app-release-unsigned.apk" "R3DNETWORK_${SHA}_${TS}_release.apk"
+          
+          [ -f "$BUILD_DIR/release/app-release.apk" ] && \
+            cp "$BUILD_DIR/release/app-release.apk" "R3DNETWORK_${SHA}_${TS}_release-signed.apk"
+          
+          [ -f "$BUILD_DIR/debug/app-debug.apk" ] && \
+            cp "$BUILD_DIR/debug/app-debug.apk" "R3DNETWORK_${SHA}_${TS}_debug.apk"
+          
+          ls -la *.apk 2>/dev/null || true
+
+      - name: List build outputs
+        run: |
+          echo "=== APK Files ==="
+          find app/build/outputs -name "*.apk" ! -name "*-unaligned.apk" -exec ls -lh {} \;
+          echo ""
+          echo "=== Native .so Files ==="
+          find app/build -name "*.so" -path "*/arm64-v8a/*" | head -20
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: R3DNETWORK-${{ env.BUILD_TYPE }}-${{ steps.timestamp.outputs.sha_short }}
+          path: "*.apk"
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload native .so files
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs-${{ steps.timestamp.outputs.sha_short }}
+          path: |
+            app/build/intermediates/stripped_native_libs/**/lib/arm64-v8a/*.so
+            app/build/intermediates/stripped_native_libs/**/lib/armeabi-v7a/*.so
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Build summary
+        run: |
+          echo "## Build Result" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type:** $BUILD_TYPE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ steps.timestamp.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Wrapper:** ${{ steps.wrapper.outputs.status }}" >> $GITHUB_STEP_SUMMARY
