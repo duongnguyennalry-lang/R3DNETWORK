@@ -1,3 +1,4 @@
+#pragma once
 //
 // Created by github.com/seedhollow on 17/10/25.
 //
