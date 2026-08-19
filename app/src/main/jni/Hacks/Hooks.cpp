@@ -1,86 +1,140 @@
-#pragma once
-
-// ================================================================
-//  [FIX] Đổi "../MainHeader.h" → "MainHeader.h"
-//  "../" là relative path cứng — compiler không dùng -I flags
-//  "MainHeader.h" → compiler search qua LOCAL_C_INCLUDES → tìm được
-// ================================================================
+//
+// ThrowIO Mod — Hook Implementations
+// Chỉ include Vars.h, KHÔNG khai báo lại gì từ Vars
+//
+#include "Vars.h"
 #include "MainHeader.h"
 
-#include <atomic>
 #include <sys/mman.h>
 #include <unistd.h>
 
-// ================================================================
-//  VARS NAMESPACE
-// ================================================================
-namespace Vars {
-
-    namespace PlayerBalance {
-        inline std::atomic<void*> instance        { nullptr };
-        inline std::atomic<bool>  infiniteMoney   { false   };
-        inline std::atomic<bool>  infinitePremium { false   };
-        inline std::atomic<bool>  maxLevel        { false   };
-        inline std::atomic<bool>  noAds           { false   };
-        inline std::atomic<bool>  forceUpdateMoney{ false   };
-        inline std::atomic<bool>  forceMaxLevel   { false   };
-    }
-
-    namespace FnPtrs {
-        // ── Setters ──────────────────────────────────────────────
-        inline void (*set_SoftMoney)(void* instance, long  value) = nullptr;
-        inline void (*set_HardMoney)(void* instance, long  value) = nullptr;
-        inline void (*set_Level)    (void* instance, int   value) = nullptr;
-        inline void (*set_Exp)      (void* instance, int   value) = nullptr;
-        inline void (*set_NoAds)    (void* instance, bool  value) = nullptr;
-
-        // ── Originals (Dobby trampoline) ─────────────────────────
-        inline void (*orig_set_SoftMoney)  (void* instance, long  value)         = nullptr;
-        inline void (*old_ApplyDamage)     (void* instance, long  damage,
-                                            void* from, bool isCritical,
-                                            void* extra)                          = nullptr;
-        inline void (*old_SetDeath)        (void* instance, bool  isDead)        = nullptr;
-        inline void (*old_CharWeapon_update)(void* instance, float deltaTime)    = nullptr;
-        inline void (*old_SaveLocal)       (void* instance)                      = nullptr;
-    }
-
-    namespace Combat {
-        inline std::atomic<bool>  godMode        { false  };
-        inline std::atomic<bool>  speedHack      { false  };
-        inline std::atomic<float> speedMultiplier{ 2.0f   };
-    }
-
-    namespace Security {
-        inline std::atomic<bool> antiCheat { true };
-    }
-
-} // namespace Vars
-
-// ================================================================
-//  HOOKS NAMESPACE
-// ================================================================
 namespace Hooks {
 
-    // ── Legacy hook — giữ để link không lỗi ─────────────────────
-    extern void (*orig_PlayerUpdate)(void* pInstance);
-    void PlayerUpdate(void* pInstance);
+    // ── Legacy — giữ để link không lỗi ───────────────────────────
+    void (*orig_PlayerUpdate)(void* pInstance) = nullptr;
 
-    // ── Utility ──────────────────────────────────────────────────
-    bool IsValidPtr(const void* ptr, size_t sz = sizeof(void*)) noexcept;
+    // ================================================================
+    //  UTILITY: pointer sanity check
+    //  Bắt nullptr + địa chỉ kernel space trước khi deref
+    // ================================================================
+    bool IsValidPtr(const void* ptr, size_t sz) noexcept {
+        if (!ptr) return false;
+        auto addr = reinterpret_cast<uintptr_t>(ptr);
+        // ARM64: user space < 0x0001000000000000
+        // Loại địa chỉ thấp hơn 4KB (null page)
+        return addr > 0x1000UL && addr < 0x0001000000000000UL;
+    }
 
-    // ── Watchdog ─────────────────────────────────────────────────
-    void ApplyWatchdog();
+    // ================================================================
+    //  WATCHDOG — áp dụng tất cả toggle đang bật
+    //  Gọi mỗi frame (eglSwapBuffers) + mỗi SaveLocal
+    // ================================================================
+    void ApplyWatchdog() {
+        void* inst = Vars::PlayerBalance::instance.load(std::memory_order_acquire);
+        if (!IsValidPtr(inst)) return;
 
-    // ── Hook handlers ─────────────────────────────────────────────
-    void capture_set_SoftMoney  (void* instance, long  value);
-    void hook_ApplyDamage       (void* inst,     long  dmg,
-                                 void* from,     bool  crit,
-                                 void* extra);
-    void hook_SetDeath          (void* inst, bool  isDead);
-    void hook_CharWeapon_update (void* inst, float dt);
-    void hook_SaveLocal         (void* inst);
+        if (Vars::PlayerBalance::infiniteMoney.load() && Vars::FnPtrs::set_SoftMoney)
+            Vars::FnPtrs::set_SoftMoney(inst, 0x7FFFFFFF);
 
-    // ── Init ─────────────────────────────────────────────────────
-    void InitHooks();
+        if (Vars::PlayerBalance::infinitePremium.load() && Vars::FnPtrs::set_HardMoney)
+            Vars::FnPtrs::set_HardMoney(inst, 0x7FFFFFFF);
+
+        if (Vars::PlayerBalance::maxLevel.load()) {
+            if (Vars::FnPtrs::set_Level) Vars::FnPtrs::set_Level(inst, 99);
+            if (Vars::FnPtrs::set_Exp)   Vars::FnPtrs::set_Exp  (inst, 0x7FFFFFFF);
+        }
+
+        if (Vars::PlayerBalance::noAds.load() && Vars::FnPtrs::set_NoAds)
+            Vars::FnPtrs::set_NoAds(inst, true);
+
+        // Force-update buttons (one-shot từ menu)
+        if (Vars::PlayerBalance::forceUpdateMoney.exchange(false)) {
+            if (Vars::FnPtrs::set_SoftMoney) Vars::FnPtrs::set_SoftMoney(inst, 0x7FFFFFFF);
+            if (Vars::FnPtrs::set_HardMoney) Vars::FnPtrs::set_HardMoney(inst, 0x7FFFFFFF);
+        }
+
+        if (Vars::PlayerBalance::forceMaxLevel.exchange(false)) {
+            if (Vars::FnPtrs::set_Level) Vars::FnPtrs::set_Level(inst, 99);
+            if (Vars::FnPtrs::set_Exp)   Vars::FnPtrs::set_Exp  (inst, 0x7FFFFFFF);
+        }
+    }
+
+    // ================================================================
+    //  HOOK: capture_set_SoftMoney
+    //  Bắt instance lần đầu tiên PlayerBalance gọi set_SoftMoney
+    //  Dùng compare_exchange để thread-safe, không cần mutex
+    // ================================================================
+    void capture_set_SoftMoney(void* instance, long value) {
+        if (IsValidPtr(instance)) {
+            void* expected = nullptr;
+            // Chỉ ghi nếu chưa có — race-free
+            Vars::PlayerBalance::instance.compare_exchange_strong(
+                expected, instance,
+                std::memory_order_release,
+                std::memory_order_relaxed
+            );
+        }
+        // Gọi original để game không bị break
+        if (Vars::FnPtrs::orig_set_SoftMoney)
+            Vars::FnPtrs::orig_set_SoftMoney(instance, value);
+    }
+
+    // ================================================================
+    //  HOOK: ApplyDamage — God Mode
+    //  Nếu GodMode bật → drop damage hoàn toàn, không gọi original
+    // ================================================================
+    void hook_ApplyDamage(void* inst, long dmg, void* from, bool crit, void* extra) {
+        if (Vars::Combat::godMode.load() && IsValidPtr(inst)) return;
+        if (Vars::FnPtrs::old_ApplyDamage)
+            Vars::FnPtrs::old_ApplyDamage(inst, dmg, from, crit, extra);
+    }
+
+    // ================================================================
+    //  HOOK: SetDeath — Không cho chết
+    //  Override isDead = false trước khi pass xuống original
+    // ================================================================
+    void hook_SetDeath(void* inst, bool isDead) {
+        if (Vars::Combat::godMode.load() && IsValidPtr(inst))
+            isDead = false;
+        if (Vars::FnPtrs::old_SetDeath)
+            Vars::FnPtrs::old_SetDeath(inst, isDead);
+    }
+
+    // ================================================================
+    //  HOOK: CharWeapon::update — Speed Hack
+    //  Scale deltaTime trước khi pass — multiplier range 1x–5x
+    // ================================================================
+    void hook_CharWeapon_update(void* inst, float dt) {
+        if (Vars::Combat::speedHack.load() && IsValidPtr(inst))
+            dt *= Vars::Combat::speedMultiplier.load(std::memory_order_relaxed);
+        if (Vars::FnPtrs::old_CharWeapon_update)
+            Vars::FnPtrs::old_CharWeapon_update(inst, dt);
+    }
+
+    // ================================================================
+    //  HOOK: SaveLocal — Anti-Cheat sandwich
+    //  Apply trước + sau SaveLocal để reset về giá trị mod
+    //  ngay cả khi game tự reset trong lúc save
+    // ================================================================
+    void hook_SaveLocal(void* inst) {
+        if (Vars::Security::antiCheat.load()) ApplyWatchdog();
+        if (Vars::FnPtrs::old_SaveLocal)      Vars::FnPtrs::old_SaveLocal(inst);
+        if (Vars::Security::antiCheat.load()) ApplyWatchdog();
+    }
+
+    // ================================================================
+    //  LEGACY: PlayerUpdate — noop nếu không hook
+    // ================================================================
+    void PlayerUpdate(void* pInstance) {
+        if (orig_PlayerUpdate) orig_PlayerUpdate(pInstance);
+    }
+
+    // ================================================================
+    //  InitHooks — placeholder, hooks thực gắn trong hack_thread
+    //  bằng DHK() sau khi il2cpp load xong
+    // ================================================================
+    void InitHooks() {
+        LOGI(OBFUSCATE("ThrowIO: Hooks namespace ready"));
+    }
 
 } // namespace Hooks
