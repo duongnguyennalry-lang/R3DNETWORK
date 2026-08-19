@@ -1,30 +1,20 @@
 #include "Menu/Menu.hpp"
 #include "Includes/obfuscate.h"
 
-
-//Big letter cause crash
 void Menu::setText(JNIEnv *env, jobject obj, const char *text) {
-    //https://stackoverflow.com/a/33627640/3763113
-    //A little JNI calls here. You really really need a great knowledge if you want to play with JNI stuff
-    //Html.fromHtml("");
     jclass html = (*env).FindClass(OBFUSCATE("android/text/Html"));
     jmethodID fromHtml = (*env).GetStaticMethodID(html, OBFUSCATE("fromHtml"), OBFUSCATE(
             "(Ljava/lang/String;)Landroid/text/Spanned;"));
-
-    //setText("");
     jclass textView = (*env).FindClass(OBFUSCATE("android/widget/TextView"));
     jmethodID setText = (*env).GetMethodID(textView, OBFUSCATE("setText"),
                                            OBFUSCATE("(Ljava/lang/CharSequence;)V"));
-
-    //Java string
     jstring jstr = (*env).NewStringUTF(text);
     (*env).CallVoidMethod(obj, setText, (*env).CallStaticObjectMethod(html, fromHtml, jstr));
 }
 
-void Menu::showDialog(jobject ctx, JNIEnv *env, const char *title, const char *msg){
+void Menu::showDialog(jobject ctx, JNIEnv *env, const char *title, const char *msg) {
     jclass Alert = env->FindClass(OBFUSCATE("android/app/AlertDialog$Builder"));
     jmethodID AlertCons = env->GetMethodID(Alert, OBFUSCATE("<init>"), OBFUSCATE("(Landroid/content/Context;)V"));
-
     jobject MainAlert = env->NewObject(Alert, AlertCons, ctx);
 
     jmethodID setTitle = env->GetMethodID(Alert, OBFUSCATE("setTitle"), OBFUSCATE("(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;"));
@@ -43,7 +33,6 @@ void Menu::showDialog(jobject ctx, JNIEnv *env, const char *title, const char *m
     jobject creaetob = env->CallObjectMethod(MainAlert, create);
 
     jclass AlertN = env->FindClass(OBFUSCATE("android/app/AlertDialog"));
-
     jmethodID show = env->GetMethodID(AlertN, OBFUSCATE("show"), OBFUSCATE("()V"));
     env->CallVoidMethod(creaetob, show);
 }
@@ -53,8 +42,18 @@ void Menu::showToast(JNIEnv *env, jobject thiz, const char *text, int length) {
     jclass html = (*env).FindClass(OBFUSCATE("android/text/Html"));
     jmethodID fromHtml = (*env).GetStaticMethodID(html, OBFUSCATE("fromHtml"), OBFUSCATE("(Ljava/lang/String;)Landroid/text/Spanned;"));
     jclass toast = env->FindClass(OBFUSCATE("android/widget/Toast"));
-    jmethodID methodMakeText =env->GetStaticMethodID(toast,OBFUSCATE("makeText"),OBFUSCATE("(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;"));
-    jobject toastobj = env->CallStaticObjectMethod(toast, methodMakeText,thiz, (*env).CallStaticObjectMethod(html, fromHtml, jstr), length);
+    jmethodID methodMakeText = env->GetStaticMethodID(toast, OBFUSCATE("makeText"), OBFUSCATE("(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;"));
+    jobject toastobj = env->CallStaticObjectMethod(toast, methodMakeText, thiz, (*env).CallStaticObjectMethod(html, fromHtml, jstr), length);
     jmethodID methodShow = env->GetMethodID(toast, OBFUSCATE("show"), OBFUSCATE("()V"));
     env->CallVoidMethod(toastobj, methodShow);
+}
+
+// ================================================================
+//  FIX: RegisterMenu — định nghĩa hàm bị thiếu
+//  Main.cpp:83 gọi hàm này để khởi tạo menu service
+// ================================================================
+void RegisterMenu(JNIEnv *env) {
+    if (!env) return;
+    // Stub — menu được khởi tạo qua Java service (Launcher/Main)
+    // JNI native methods đăng ký riêng trong JNILoader.cpp
 }
