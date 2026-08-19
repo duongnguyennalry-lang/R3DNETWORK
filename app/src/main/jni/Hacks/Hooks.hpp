@@ -5,24 +5,20 @@
 
 #include "Visuals.hpp"
 
-// ── Khai báo namespace Hooks để Main.cpp gọi được ──────────────────────────
+// ── Khai báo namespace Hooks ─────────────────────────────────────────────────
 namespace Hooks {
     void InitHooks();
+    void ApplyWatchdog();
 }
 
 // ── Implementations của Visuals ─────────────────────────────────────────────
 void Visuals::Update(Draw draw, int screenWidth, int screenHeight) {
-    //Example to get camera
-    //UnityResolve::UnityType::Camera *camera = UnityResolve::UnityType::Camera::GetMain();
-    // Full documentation of UnityResolve.hpp
-    // https://github.com/issuimo/UnityResolve.hpp
     if (Vars::PlayerData::ESPCrosshair) {
         DrawEspCrosshair(draw);
     }
 }
 
 void Visuals::DrawEspCrosshair(Draw draw) {
-    // Draw ESP here
     Unity::Color crosshair_color {0, 0, 0, 255};
 
     if (Vars::PlayerData::CrosshairColor == 0) {
