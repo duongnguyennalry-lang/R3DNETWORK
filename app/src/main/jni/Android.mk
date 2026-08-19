@@ -18,14 +18,11 @@ LOCAL_LDFLAGS   += -Wl,--gc-sections,--strip-all,-llog
 LOCAL_LDLIBS    := -llog -landroid -lEGL -lGLESv2
 LOCAL_ARM_MODE  := arm
 
-# ── [FIX] Include paths ──────────────────────────────────────────
-# Dùng $(LAYOUT) trực tiếp — tránh my-dir bị sai trong $(eval include)
 LOCAL_C_INCLUDES += $(LOCAL_PATH)
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/Hacks
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/Includes
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/Menu
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/KittyMemory
-# [KEY FIX] Thêm lglLayout/jni vào include path qua biến LAYOUT
 ifdef LAYOUT
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../$(LAYOUT)/jni
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../$(LAYOUT)/jni/Menu
@@ -47,6 +44,15 @@ LOCAL_SRC_FILES := $(LOCAL_PATH)/Main.cpp \
     $(LOCAL_PATH)/Hacks/Hooks.cpp \
     $(LOCAL_PATH)/Hacks/Visuals.cpp \
 
+# ================================================================
+#  FIX: BUILD_SHARED_LIBRARY phải nằm TRƯỚC foreach eval
+#  foreach gọi $(eval include lglLayout/jni/Android.mk)
+#  Android.mk đó có include $(CLEAR_VARS) → reset LOCAL_C_INCLUDES
+#  Nếu BUILD_SHARED_LIBRARY nằm sau → GameHelper build không có include path
+# ================================================================
+include $(BUILD_SHARED_LIBRARY)
+
+
 FLAVOR_DIMENSION_VARS := LAYOUT
 
 $(foreach FLAVOR_DIMENSION,$(FLAVOR_DIMENSION_VARS),\
@@ -60,8 +66,6 @@ $(foreach FLAVOR_DIMENSION,$(FLAVOR_DIMENSION_VARS),\
         $(warning No value set for dimension $(FLAVOR_DIMENSION))\
     )\
 )
-
-include $(BUILD_SHARED_LIBRARY)
 
 
 # Loader
