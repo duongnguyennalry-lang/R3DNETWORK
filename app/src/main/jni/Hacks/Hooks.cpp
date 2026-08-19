@@ -149,15 +149,13 @@ void Hooks::hook_SaveLocal(void* inst) {
 void Hooks::InitHooks() {
     LOGI(OBFUSCATE("ThrowIO: InitHooks start — hardcoded offsets"));
 
-    // Lấy base address của libil2cpp.so
-    auto il2cpp = KittyMemory::getLibraryMap(OBFUSCATE("libil2cpp.so"));
-    if (!il2cpp.isValid()) {
+    // Giải pháp dứt điểm: Dùng thẳng hàm getAbsoluteAddress để lấy base, bỏ qua lỗi cấu trúc ProcMap
+    const uintptr_t base = KittyMemory::getAbsoluteAddress(OBFUSCATE("libil2cpp.so"), 0x0);
+    
+    if (base == 0) {
         LOGE(OBFUSCATE("ThrowIO: FATAL — libil2cpp.so not found"));
         return;
     }
-    
-    // Đã cập nhật dòng này: đổi startAddress thành start
-    const uintptr_t base = il2cpp.start; 
     
     LOGI(OBFUSCATE("ThrowIO: il2cpp base = 0x%lx"), base);
 
