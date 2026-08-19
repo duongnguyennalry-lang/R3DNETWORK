@@ -15,19 +15,17 @@ namespace Hooks {
 
     // ================================================================
     //  UTILITY: pointer sanity check
-    //  Bắt nullptr + địa chỉ kernel space trước khi deref
+    //  FIX: sz có default value → gọi 1 hoặc 2 argument đều được
     // ================================================================
-    bool IsValidPtr(const void* ptr, size_t sz) noexcept {
+    bool IsValidPtr(const void* ptr, size_t sz = sizeof(void*)) noexcept {
         if (!ptr) return false;
         auto addr = reinterpret_cast<uintptr_t>(ptr);
-        // ARM64: user space < 0x0001000000000000
-        // Loại địa chỉ thấp hơn 4KB (null page)
         return addr > 0x1000UL && addr < 0x0001000000000000UL;
     }
 
     // ================================================================
     //  WATCHDOG — áp dụng tất cả toggle đang bật
-    //  Gọi mỗi frame (eglSwapBuffers) + mỗi SaveLocal
+    //  Gọi mỗi frame + mỗi SaveLocal
     // ================================================================
     void ApplyWatchdog() {
         void* inst = Vars::PlayerBalance::instance.load(std::memory_order_acquire);
@@ -47,7 +45,7 @@ namespace Hooks {
         if (Vars::PlayerBalance::noAds.load() && Vars::FnPtrs::set_NoAds)
             Vars::FnPtrs::set_NoAds(inst, true);
 
-        // Force-update buttons (one-shot từ menu)
+        // One-shot force buttons từ menu
         if (Vars::PlayerBalance::forceUpdateMoney.exchange(false)) {
             if (Vars::FnPtrs::set_SoftMoney) Vars::FnPtrs::set_SoftMoney(inst, 0x7FFFFFFF);
             if (Vars::FnPtrs::set_HardMoney) Vars::FnPtrs::set_HardMoney(inst, 0x7FFFFFFF);
@@ -62,26 +60,22 @@ namespace Hooks {
     // ================================================================
     //  HOOK: capture_set_SoftMoney
     //  Bắt instance lần đầu tiên PlayerBalance gọi set_SoftMoney
-    //  Dùng compare_exchange để thread-safe, không cần mutex
     // ================================================================
     void capture_set_SoftMoney(void* instance, long value) {
         if (IsValidPtr(instance)) {
             void* expected = nullptr;
-            // Chỉ ghi nếu chưa có — race-free
             Vars::PlayerBalance::instance.compare_exchange_strong(
                 expected, instance,
                 std::memory_order_release,
                 std::memory_order_relaxed
             );
         }
-        // Gọi original để game không bị break
         if (Vars::FnPtrs::orig_set_SoftMoney)
             Vars::FnPtrs::orig_set_SoftMoney(instance, value);
     }
 
     // ================================================================
     //  HOOK: ApplyDamage — God Mode
-    //  Nếu GodMode bật → drop damage hoàn toàn, không gọi original
     // ================================================================
     void hook_ApplyDamage(void* inst, long dmg, void* from, bool crit, void* extra) {
         if (Vars::Combat::godMode.load() && IsValidPtr(inst)) return;
@@ -91,7 +85,6 @@ namespace Hooks {
 
     // ================================================================
     //  HOOK: SetDeath — Không cho chết
-    //  Override isDead = false trước khi pass xuống original
     // ================================================================
     void hook_SetDeath(void* inst, bool isDead) {
         if (Vars::Combat::godMode.load() && IsValidPtr(inst))
@@ -102,7 +95,6 @@ namespace Hooks {
 
     // ================================================================
     //  HOOK: CharWeapon::update — Speed Hack
-    //  Scale deltaTime trước khi pass — multiplier range 1x–5x
     // ================================================================
     void hook_CharWeapon_update(void* inst, float dt) {
         if (Vars::Combat::speedHack.load() && IsValidPtr(inst))
@@ -113,8 +105,6 @@ namespace Hooks {
 
     // ================================================================
     //  HOOK: SaveLocal — Anti-Cheat sandwich
-    //  Apply trước + sau SaveLocal để reset về giá trị mod
-    //  ngay cả khi game tự reset trong lúc save
     // ================================================================
     void hook_SaveLocal(void* inst) {
         if (Vars::Security::antiCheat.load()) ApplyWatchdog();
@@ -123,7 +113,7 @@ namespace Hooks {
     }
 
     // ================================================================
-    //  LEGACY: PlayerUpdate — noop nếu không hook
+    //  LEGACY: PlayerUpdate
     // ================================================================
     void PlayerUpdate(void* pInstance) {
         if (orig_PlayerUpdate) orig_PlayerUpdate(pInstance);
@@ -131,7 +121,6 @@ namespace Hooks {
 
     // ================================================================
     //  InitHooks — placeholder, hooks thực gắn trong hack_thread
-    //  bằng DHK() sau khi il2cpp load xong
     // ================================================================
     void InitHooks() {
         LOGI(OBFUSCATE("ThrowIO: Hooks namespace ready"));
