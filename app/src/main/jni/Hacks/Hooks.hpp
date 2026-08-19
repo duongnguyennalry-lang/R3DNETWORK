@@ -5,14 +5,17 @@
 
 #include "Visuals.hpp"
 
+// ── Khai báo namespace Hooks để Main.cpp gọi được ──────────────────────────
+namespace Hooks {
+    void InitHooks();
+}
 
+// ── Implementations của Visuals ─────────────────────────────────────────────
 void Visuals::Update(Draw draw, int screenWidth, int screenHeight) {
     //Example to get camera
     //UnityResolve::UnityType::Camera *camera = UnityResolve::UnityType::Camera::GetMain();
     // Full documentation of UnityResolve.hpp
     // https://github.com/issuimo/UnityResolve.hpp
-    
-    // Đã sửa . thành ::
     if (Vars::PlayerData::ESPCrosshair) {
         DrawEspCrosshair(draw);
     }
@@ -22,7 +25,6 @@ void Visuals::DrawEspCrosshair(Draw draw) {
     // Draw ESP here
     Unity::Color crosshair_color {0, 0, 0, 255};
 
-    // Đã sửa . thành ::
     if (Vars::PlayerData::CrosshairColor == 0) {
         crosshair_color = Unity::Color(255, 0, 0, 255);
     } else if (Vars::PlayerData::CrosshairColor == 1) {
@@ -31,6 +33,9 @@ void Visuals::DrawEspCrosshair(Draw draw) {
         crosshair_color = Unity::Color(0, 0, 255, 255);
     }
 
-    // Đã sửa . thành ::
-    draw.DrawCrosshair(crosshair_color, Unity::Vector2(draw.getWidth() / 2.0f, draw.getHeight() / 2.0f), Vars::PlayerData::CrosshairSize * 10);
+    draw.DrawCrosshair(
+        crosshair_color,
+        Unity::Vector2(draw.getWidth() / 2.0f, draw.getHeight() / 2.0f),
+        Vars::PlayerData::CrosshairSize * 10
+    );
 }
