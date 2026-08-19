@@ -155,7 +155,10 @@ void Hooks::InitHooks() {
         LOGE(OBFUSCATE("ThrowIO: FATAL — libil2cpp.so not found"));
         return;
     }
-    const uintptr_t base = il2cpp.startAddress;
+    
+    // Đã cập nhật dòng này: đổi startAddress thành start
+    const uintptr_t base = il2cpp.start; 
+    
     LOGI(OBFUSCATE("ThrowIO: il2cpp base = 0x%lx"), base);
 
     // Bind function pointers: base + offset = địa chỉ tuyệt đối
