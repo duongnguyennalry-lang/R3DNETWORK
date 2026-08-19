@@ -28,9 +28,6 @@
 // ── Dobby — Hook framework (BẮT BUỘC) ──────────────────────────
 #include "dobby/dobby.h"
 
-// ── KittyMemory — thao tác bộ nhớ (nếu cần) ────────────────────
-#include "KittyMemory/KittyMemory.hpp"
-
 // ── Project headers (BẮT BUỘC) ─────────────────────────────────
 #include "Hacks/Vars.h"
 #include "Hacks/Hooks.hpp"
@@ -42,12 +39,10 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 // ── Dobby Helper macro ─────────────────────────────────────────
-// Dùng: DHK(target_addr, hook_func, orig_func_ptr)
 #define DHK(target, hook, orig) \
     DobbyHook((void*)(target), (void*)(hook), (void**)&(orig))
 
 // ── AddPointer helper ──────────────────────────────────────────
-// Gán địa chỉ vào con trỏ hàm một cách an toàn
 template<typename T>
 static inline void AddPointer(T& fnPtr, uintptr_t offset) {
     fnPtr = reinterpret_cast<T>(offset);
@@ -62,7 +57,7 @@ static inline bool IsValidPtr(const void* ptr, size_t sz = 1) noexcept {
     return true;
 }
 
-// ── GL globals (dùng cho kích thước màn hình nếu cần) ──────────
+// ── GL globals (nếu Main.cpp cần) ──────────────────────────────
 inline int glWidth  = 0;
 inline int glHeight = 0;
 
