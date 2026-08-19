@@ -1,36 +1,35 @@
 //
-// Created by rosetta on 05/07/2024.
-// Modified by AXIOM for ThrowIO Mod
+// Created by github.com/seedhollow on 17/10/25.
 //
 
-#ifndef HOOKS_H
-#define HOOKS_H
+#include "Visuals.hpp"
 
-#include "Vars.h"
-#include "UnityResolve/UnityResolve.hpp"
-#include "Includes/ObscuredTypes.hpp"
-#include "Includes/obfuscate.h"
-#include <cstddef>
 
-class Hooks {
-public:
-    static void InitHooks();
+void Visuals::Update(Draw draw, int screenWidth, int screenHeight) {
+    //Example to get camera
+    //UnityResolve::UnityType::Camera *camera = UnityResolve::UnityType::Camera::GetMain();
+    // Full documentation of UnityResolve.hpp
+    // https://github.com/issuimo/UnityResolve.hpp
+    
+    // Đã sửa . thành ::
+    if (Vars::PlayerData::ESPCrosshair) {
+        DrawEspCrosshair(draw);
+    }
+}
 
-    // ── Mẫu gốc R3DNETWORK (giữ lại nếu cần) ────────────────
-    static void (*orig_PlayerUpdate)(void *pInstance);
-    static void PlayerUpdate(void *pInstance);
+void Visuals::DrawEspCrosshair(Draw draw) {
+    // Draw ESP here
+    Unity::Color crosshair_color {0, 0, 0, 255};
 
-    // ── THROWIO MOD HOOKS ──────────────────────────────────
-    // Capture instance + hooks
-    static void capture_set_SoftMoney(void* instance, long value);
-    static void hook_ApplyDamage     (void* inst, long dmg, void* from, bool crit, void* extra);
-    static void hook_SetDeath        (void* inst, bool isDead);
-    static void hook_CharWeapon_update(void* inst, float dt);
-    static void hook_SaveLocal       (void* inst);
+    // Đã sửa . thành ::
+    if (Vars::PlayerData::CrosshairColor == 0) {
+        crosshair_color = Unity::Color(255, 0, 0, 255);
+    } else if (Vars::PlayerData::CrosshairColor == 1) {
+        crosshair_color = Unity::Color(0, 255, 0, 255);
+    } else {
+        crosshair_color = Unity::Color(0, 0, 255, 255);
+    }
 
-    // Utilities
-    static void ApplyWatchdog();
-    static bool IsValidPtr(const void* ptr, size_t sz = 1) noexcept;
-};
-
-#endif // HOOKS_H
+    // Đã sửa . thành ::
+    draw.DrawCrosshair(crosshair_color, Unity::Vector2(draw.getWidth() / 2.0f, draw.getHeight() / 2.0f), Vars::PlayerData::CrosshairSize * 10);
+}
