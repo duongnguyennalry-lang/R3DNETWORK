@@ -11,6 +11,9 @@
 #include <dlfcn.h>
 #include <numbers>
 
+// ← CRASHLOGGER — phải đứng đầu, trước mọi include khác
+#include "Includes/CrashLogger.h"
+
 #include "Includes/Logger.h"
 #include "Includes/obfuscate.h"
 #include "dobby/dobby.h"
@@ -61,6 +64,9 @@ void *hack_thread(void *) {
 
 __attribute__((constructor))
 void init() {
+    // ← DÒNG ĐẦU TIÊN — bắt crash kể cả khi lib vừa load xong đã chết
+    InitCrashLogger();
+
     // Create a new thread so it does not block the main thread, means the game would not freeze
     pthread_t ptid;
     pthread_create(&ptid, NULL, hack_thread, NULL);
